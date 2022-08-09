@@ -1,10 +1,8 @@
 import numpy as np
 import picos as pic
 import cvxopt as cvx
-import qlib as ql
-import bell3p as b3
-import bellnp as bn
 import itertools as it
+import bellpy.analyze.bellnp as bn
 
 def pickron(meas):
     M = list(meas[:])
@@ -58,12 +56,12 @@ def opt_state(obs,B):
 
 #Z = np.array([[1, 0],[0, -1]], dtype=np.complex)
 def randomobs(out=2):
-    U = ql.randomunitary(out)
+    U = bn.randomunitary(out)
    #if out==2:
    #    Z = np.array([[1, 0],[0, -1]],dtype=np.complex)
    #else:
     Z = np.diag(np.random.randint(0,2,out)*2 - 1).astype(np.complex)
-    return np.einsum('ij,jk,kl->il',U,Z,ql.dagger(U))
+    return np.einsum('ij,jk,kl->il',U,Z,bn.dagger(U))
 
 def randobsforscenario(nmeas, dims):
    #print('nmeas', nmeas)
@@ -115,15 +113,7 @@ x in startobs]
     return viol, rho, obs
 
 
-def test():
-    bellfile = "all_i3322_gen_wo_dup_sorted.list"
-    B = b3.tab_from_human_sym_file(2,bellfile)
-    print('B',B)
-    print(violation(B,[2,2,2],verbose=True)) 
-    return 0
 
-
-#test()
 def simple_violation_fix_state(B, iobs, rho, repetitions=10,verbose=False):
    #print('sv started')
    #rho = np.outer(psi.conj(), psi)
@@ -168,10 +158,9 @@ verbose=verbose) for x in startobs]
             print('viol', viol)
     return viol, obs
 
-#import qlib as ql
 def test():
     B = 3*np.random.random([4,4,4])
-    ghz = (ql.ket([0,0,0]) + ql.ket([1,1,1]))/np.sqrt(2)
+    ghz = (bn.ket([0,0,0]) + bn.ket([1,1,1]))/np.sqrt(2)
     rhoghz = np.outer(ghz, ghz)
     v, o = violation_fix_state(B, [2,2,2], rhoghz, verbose=True)
     return 0

@@ -1,8 +1,7 @@
 import numpy as np
-import bellnp as bn
-import qlib as ql
 import scipy.linalg as la
 import itertools as it
+import bellpy.analyze.bellnp as bn
 
 class Bellopt:
     def __init__(self, btab, dims = 2, min_iterations = 10, initsett=None, verbose=True, state=None, fix_state=False):

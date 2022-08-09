@@ -4,8 +4,8 @@ measurement settings and system dimensions. Only dichotomic measurements
 import numpy as np
 import picos as pic
 import cvxopt as cvx
-import bellnp as bn
 import itertools as it
+import bellpy.analyze.bellnp as bn
 
 
 def randomunitary(n):

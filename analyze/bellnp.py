@@ -7,6 +7,38 @@ import itertools as it
 from itertools import chain, combinations
 from functools import reduce
 
+def randomunitary(n):
+    M = (np.random.randn(n,n) + 1j*np.random.randn(n,n))/np.sqrt(2);
+    q,r = np.linalg.qr(M);
+    d = np.diagonal(r);
+    d = d/np.absolute(d);
+    q = np.multiply(q,d,q);
+    return q
+
+def dagger(v):
+    return v.conjugate().transpose();
+
+def ket(n,dim=2):
+############ Example
+#   |0 0 0> = (1 0 0 0 0 0 0 0)
+#   |0 0 1> = (1 0) x (0 1 0 0) = (0 1 0 0 0 0 0 0)
+#   |0 1 0> = (1 0) x (0 0 1 0) = (0 0 1 0 0 0 0 0)
+#   |0 1 1> = (1 0) x (0 0 0 1) = (0 0 0 1 0 0 0 0)
+#   |1 0 0> =                   = (0 0 0 0 1 0 0 0)
+
+    parties = np.shape(n)
+    if parties!=():
+        parties = parties[0]
+        #print(parties)
+        v = np.zeros(dim**parties)
+        numb = 0
+        for i in range(0,parties):
+            numb = numb + n[i]*dim**(parties - i - 1)
+        v[numb] = 1
+    else:
+        v = np.zeros(dim)
+        v[np.mod(n,dim)] = 1
+    return v
 
 
 def tabletohuman(array):

@@ -388,4 +388,7 @@ class Bell_inequality_collection:
     def __len__(self):
         return len(self.bis)
 
+    def __getitem__(self, i):
+        return self.bis[i]
+
 
