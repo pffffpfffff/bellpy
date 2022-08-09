@@ -169,3 +169,7 @@ class NSpb_space(Behavior_space):
         bns = [ b[i] for  i in self.indices]
         return Behavior(self, bns)
 
+    @property
+    def events(self):
+        return [self.fullspace.events[i] for i in self.indices]
+
