@@ -1,8 +1,11 @@
 import copy
+import dill
+import inspect
 
 class Function:
-    def __init__(self, *functions):
+    def __init__(self, *functions, string = ''):
         self.fs = functions
+        self.string = string
 
     def __call__(self, argument = None):
         x = argument
@@ -15,28 +18,105 @@ class Function:
         return x
 
     def __matmul__(self, other: 'Function'):
-        return Function(*(other.fs + self.fs))
+        f = Function(*(other.fs + self.fs))
+        f.string = ', '.join([other.string, self.string])
+        return f
         
     def __pow__(self, n: int):
         return Function(*(self.fs*n))
 
     def __add__(self, other: 'Function'):
-        return Function( lambda x: self.__call__(x) + other.__call__(x)) 
+        f = Function( lambda x: self.__call__(x) + other.__call__(x)) 
+        f.string = ' + '.join([self.string, other.string])
+        return f
+        
+
+    def __radd__(self, other: int):
+        # make sum() method work
+        return self
+
+#   def __neg__(self):
+#       neg = Function(lambda x: -x)
+#       return neg @ self
+
+    def __sub__(self, other: 'Function'):
+        f = Function( lambda x: self.__call__(x) - other.__call__(x)) 
+        f.string = ' - ('.join([self.string, other.string]) + ')'
+        return f
+
+    def __mul__(self, other: 'Function'):
+        f = Function( lambda x: self(x) * other(x))
+        f.string = ' * ('.join([self.string, other.string]) + ')'
+        return f
+
+    def __str__(self):
+       # return ','.join([dill.source.getsource(f) for f in self.fs])
+        return self.string       
+    
+#   def __repr__(self):
+#       return str(self)
+
+
+class Function_by_string:
+    def __init__(self, string):
+        self.string = string
+
+    def __call__(self, argument):
+        return eval(self.string.format(argument))
+       
+    def __add__(self, other: 'Function'):
+        f = Function_by_string(' + '.join([other.string, self.string]))
+        return f
+        
+    def __radd__(self, other: int):
+        # make sum() method work
+        return self
+
+    def __sub__(self, other: 'Function'):
+        f = Function( lambda x: self.__call__(x) + other.__call__(x)) 
+        f.string = ' - ('.join([other.string, self.string]) + ')'
+        return f
+
+    def __mul__(self, other: 'Function'):
+        f = Function( lambda x: self(x) * other(x))
+        f.string = '(' + ') * ('.join([other.string, self.string]) + ')'
+        return f
+
+    def __str__(self):
+       # return ','.join([dill.source.getsource(f) for f in self.fs])
+        return self.string       
+
+
+class Dual_vector:
+    def __init__(self, dualvec, string = ''):
+        self.fs = dualvec
+        self.string = string
+
+    def __call__(self, argument = None):
+        return np.dot(self.fs, argument)
+
+    def __add__(self, other: 'Dual_vector'):
+        f = Dual_vector(self.fs + other.fs)
+        f.string = ' + '.join([self.string, other.string])
+        return f
+        
 
     def __radd__(self, other: int):
         # make sum() method work
         return self
 
     def __neg__(self):
-        neg = Function(lambda x: -x)
-        return neg @ self
+        return Dual_vector(-self.vector, string = "-(" + self.string + ")")
 
-    def __sub__(self, other: 'Function'):
-        return self + (-other)
+    def __sub__(self, other: 'Dual_vector'):
+        f = Dual_vector(self.fs - other.fs)
+        f.string = ' - ('.join([self.string, other.string]) + ')'
+        return f
 
-    def __mul__(self, other: 'Function'):
-        return Function( lambda x: self(x) * other(x))
-
+    def __str__(self):
+       # return ','.join([dill.source.getsource(f) for f in self.fs])
+        return self.string       
+     
 
 import numpy as np
 
@@ -65,13 +145,15 @@ def test2():
 
 def test3():
 
-    f1 = Function(np.sin)
-    f2 = Function(np.cos)
+    f1 = Function(np.sin, string = 'sin')
+    f2 = Function(np.cos, string = 'cos')
     print((f2 - f1)(3), f2(3) - f1(3))
     print((f2 * f1)(3), f2(3) * f1(3))
     l = [f1, f2]
     f3 = sum(l)
     print(f3(3), f1(3) + f2(3))
+    print(f3)
     return 0
 
 #test3()
+
