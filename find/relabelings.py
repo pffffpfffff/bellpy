@@ -26,7 +26,7 @@ class Representation:
                 print("value of xi:", x[i])
                 raise Exception("Error when calling representation")
 
-            if m is not 1:
+            if m != 1:
                 mats.append(m)
         return mdot_mats(*mats)
     def __add__(self, other):
@@ -141,6 +141,9 @@ class Group:
             class_representants += cr
             class_representants_inds += ci
         return class_representants, class_representants_inds
+
+    def representants(self, objects):
+        return self.equivalence_classes(self, [o.table for o in objects])[0]
 
        
         
@@ -262,10 +265,15 @@ def mdot_mats(*mats):
 def mdot(*groups):
    #rep = Representation(*[g.representation for g in groups])
    #rep = Representation(*(list(it.chain(*[g.representation.reps for g in groups]))))
+    G = Group()
+
+    if groups == ():
+        return G
+
     rep = sum([g.representation for g in groups])
     neworder = np.prod([g.order for g in groups])
     iters = sum([g.iterators for g in groups], [])
-    G = Group()
+
     G.set_representation(rep)
     G.set_iterators(iters, order=neworder)
     return G        
@@ -457,6 +465,9 @@ def setting_outcome_relabelings(corr_list):
 def setting_relabelings(corr_list):
     s = [SettingGroup(corr_list, i) for i in range(len(corr_list[1]))]
     return mdot(*s)
+
+
+
     
 def test5():
     c = [(0,0), (1,1), (1,2), (2,1), (2,2)]

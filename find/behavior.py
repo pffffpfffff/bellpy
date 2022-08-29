@@ -1,7 +1,9 @@
+import warnings
 from bellpy.find.assignments import *
 from bellpy.find.scenario import *
 import bellpy.find.partysym as psym
 import bellpy.find.relabelings as rel
+import bellpy.find.relabelings as rel2
 from typing import List
 from bellpy.find.jointmeasurement import Itmode
 
@@ -57,6 +59,10 @@ class Behavior_space(abc.ABC):
             bi = self.facet_to_bell_inequality(f)
             inequalities.append(bi)
         return Bell_inequality_collection(inequalities)
+
+    @abc.abstractmethod
+    def relabelings_group(party = None, setting = None, outcome = None):
+        pass
 
 
 
@@ -129,6 +135,20 @@ class Expectation_behavior_space(Behavior_space):
 
     def outcomes_permutation_group(self):
         return rel.OutcomeGroup(self.tuples)
+
+    def relabelings_group(party = None, setting = None, outcome = None):
+        groups = []
+        if party:
+            groups.append(self.party_permutation_group())
+        if setting:
+            groups += [rel.SettingGroup(self.tuples, i) for i in
+                    range(self.behavior_space.scenario.nparties)]
+        if outcome:
+            groups.append(self.outcomes_permutation_group())
+        G = rel.mdot(*groups)
+        return G
+
+
 
 
 class Default_expectation_behavior_space(Expectation_behavior_space):
@@ -263,53 +283,61 @@ class Custom_expectation_behavior_space(Expectation_behavior_space):
 
 
 
-class Behavior:
+class Behavior_space_vector:
+
     def __init__(self, bs: Behavior_space, table):
+        if not (isinstance(table, list) or isinstance(table, np.ndarray)):
+            raise Exception('Invalid table provided for Behavior_space_vector')
         self.table = table
         self.bs = bs
-        self.label_dct = dict(zip(self.bs.labels, self.table))
+        self.label_dct = None
+        self.compute_label_dct()
+        # the following to variables are only important for behaviors in an
+        # NS behavior space
+        self._events = None
+        self._labels = None
 
     @property
-    def behavior_space(self):
-        return self.bs
-
-    def __str__(self):
-        a = self.table
-        signs = [np.sign(x) for x in a]
-        signs = [ " +" if s==1 else " -" for s in signs]
-        a = np.absolute(a)
-        l = list(zip(signs, a, self.bs.labels))
-        st = "".join([ x[0] + "{} ".format(x[1]) + x[2] for x in l])
-        return st
-
-    def to_canonic_array(self):
-        # output array that is compatible with inequality library
-        return self.bs.array_to_canonic_array(self.table)
-
-    def __getitem__(self, i):
-        if type(i) is int:
-            return self.table[i]
+    def events(self):
+        # for NS behavior space
+        if self._events is None:
+            return self.bs.events()
         else:
-            try:
-                return self.label_dct[i]
-            except:
-                raise Exception("Cannot retrieve coefficient for key or index "
-                        + str(i))
+            return self._events()
+
+    def set_events(self, evts):
+        # for NS behavior space
+        self._events = evts
+        self._labels = [str(e) for e in evts]
+        return None
+        
+
+    @property
+    def labels(self):
+        # for NS behavior space
+        if self._labels is None:
+            return self.bs.labels 
+
+        else:
+            return self._labels
 
 
-#   def to_array(self):
-#       return self.table
+    def __eq__(self, other):
+        return ((tuple(self.table) == tuple(other.table)) and
+                (tuple(self.labels) == tuple(other.labels)) 
+                and (self.bs is other.bs))
+        
+    def __hash__(self):
+        return hash((tuple(self.table), self.bs, tuple(self.labels)))      
 
-#   class Expval_behavior(Behavior):
-#       def __call__(self, tup):
-#           return self.bs.correlation_value_by_tuple(self, tup)
+    def compute_label_dct(self):
+        self.label_dct = dict(zip(self.bs.labels, self.table))
+        return None
 
-
-class Bell_inequality:
-    def __init__(self, bs: Behavior_space, table):
-        self.table = table
-        self.bs = bs
-
+    def compute_table(self):
+        self.table = np.array([self.label_dct[k] for k in self.bs.labels])
+        return None
+        
     @property
     def behavior_space(self):
         return self.bs
@@ -328,12 +356,48 @@ class Bell_inequality:
         return self.bs.array_to_canonic_array(self.table)
 
     def __getitem__(self, i):
-        return self.table[i]
+        if type(i) is int:
+            return self.table[i]
+        else:
+            try:
+                return self.label_dct[i]
+            except:
+                raise Exception("Cannot retrieve coefficient for key or index "
+                        + str(i))
+
+    def __setitem__(self, i, value):
+        if type(i) is int:
+            self.table[i] = value
+            self.compute_label_dct()
+        else:
+            if i in self.label_dct:
+                self.label_dct[i] = value
+                self.compute_table()
+            else:
+                raise Exception("Cannot retrieve coefficient for key or index "
+                        + str(i))
+
+
+class Behavior(Behavior_space_vector):
+    pass
+
+
+#   def to_array(self):
+#       return self.table
+
+#   class Expval_behavior(Behavior):
+#       def __call__(self, tup):
+#           return self.bs.correlation_value_by_tuple(self, tup)
+
+
+class Bell_inequality(Behavior_space_vector):
 
     def __call__(self, beh: Behavior):
         if not ( beh.behavior_space == self.behavior_space ):
             raise ValueError('Behavior is incompatible with Bell inequality')
         return np.dot(self.table, beh.table)
+
+
 
 class Bell_inequality_collection:
     def __init__(self, bell_inequalities):
@@ -351,36 +415,25 @@ class Bell_inequality_collection:
                 Bell_inequality_collection must have the same Behavior_space')
         return bs
 
-    def remove_duplicates(self, party = None, setting = None, outcome = None):
+    def remove_duplicates(self, group = None, party = None, setting=None, outcome=None):
+        # first remove inequalities that are exact duplicates
+   #    l = [tuple(bi.table) for bi in self]
+   #    uniq_l = list(set(l))
+   #   #l = [np.array(t) for t in uniq_l]
+   #    l = uniq_l
+
+        # check group
+        if group is not None and ( party is not None or setting is not None or outcome is not None):
+            raise warnings.warn("if group is provided, other arguments are ignored")
         
-        l = [tuple(bi.table) for bi in self]
-        uniq_l = list(set(l))
-        inds1 = [ l.index(x) for x in uniq_l ]
+        if group is None:
+            group = self.behavior_space.relabelings_group(party, setting, outcome)            
 
-        if (not party) and (not setting ) and (not outcome):
-            l = [list(t) for t in uniq_l]
-            l = [ Bell_inequality(self.behavior_space, t) for t in l ]
-            self.bis = l
-            return inds1
-
-        groups = []
-        if party:
-            groups.append(self.behavior_space.party_permutation_group())
-        if setting:
-            groups += [rel.SettingGroup(self.behavior_space.tuples, i) for i in
-                    range(self.behavior_space.scenario.nparties)]
-        if outcome:
-            groups.append(self.behavior_space.outcomes_permutation_group())
-        G = rel.mdot(*groups)
-
-        l = [np.array(t) for t in l]
-
-        new_bi_tabs, inds = G.equivalence_classes(l, inds1) 
-
-        self.bis = [ Bell_inequality(self.behavior_space, t) for t in
-                new_bi_tabs ]
-
-        return inds
+        self.bis = group.representants(self.bis) 
+        
+  #     self.bis = [ Bell_inequality(self.behavior_space, t) for t in
+  #             new_l ]
+        return None
 
     def __str__(self):
         return '\n'.join([str(bi) for bi in self.bis])
@@ -390,5 +443,4 @@ class Bell_inequality_collection:
 
     def __getitem__(self, i):
         return self.bis[i]
-
 

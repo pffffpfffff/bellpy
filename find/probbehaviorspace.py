@@ -1,12 +1,19 @@
 from bellpy.find.behavior import *
 from bellpy.find.assignments import *
 from bellpy.find.jointmeasurement import Itmode
-from bellpy.find.function import Function
+from bellpy.find.function import Dual_vector
+import bellpy.find.relabeling2 as rel
+from bellpy.find.relabelings import Group
+
+from sympy.combinatorics import SymmetricGroup, PermutationGroup, Permutation
+import pdb
+import numpy.linalg as la
 
 class Probability_behavior_space(Behavior_space):
 
     def __init__(self, scenario:Scenario):
         self.sc = scenario
+        self.check_scenario_sanity()
         self.jms = self.sc.joint_measurements()
         self.events = self.compute_events()
 
@@ -28,6 +35,14 @@ class Probability_behavior_space(Behavior_space):
     def labels(self): 
         return [x.__str__() for x in self.events]
 
+    def check_scenario_sanity(self):
+        for s in self.sc.settings:
+            if tuple(s.outcomes) != tuple(range(len(s.outcomes))):
+                raise Exception("Invalid scenario supplied to \
+Probability_behavior_space: All settings are required to have outcomes labeled \
+consecutively starting with 0")
+        return
+
     def compute_events(self):
         l = []
         for jm in self.jms:
@@ -44,6 +59,28 @@ class Probability_behavior_space(Behavior_space):
                 else:
                     b.append(0)
         return Behavior(self, b)
+
+    def relabelings_group(self, parties = None, settings = None, outcomes = None):
+        groups = []
+        if parties:
+            groups.append(rel.Parties_group(SymmetricGroup(self.scenario.nparties),self))
+
+        if settings:
+            sbp = self.scenario.settings_by_party()
+            triv_group = PermutationGroup(Permutation(0))
+            for p in range(self.scenario.nparties):
+                S = SymmetricGroup(len(sbp[p]) - 1)
+                groups.append(rel.Settings_group(triv_group * S, self, p))
+        if outcomes:
+            for s in self.scenario.settings:
+                groups.append(rel.Outcomes_group(self, s))
+
+        if groups == []:
+            return Group()
+            
+        return rel.Product_group(*groups)
+            
+            
 
 
 def event_last_outcome(jm: Joint_measurement, party: int):
@@ -95,7 +132,8 @@ class NSpb_space(Behavior_space):
         self.fullspace = Probability_behavior_space(scenario)
         self.llables = self.compute_labels()
         self.indices = self.compute_indices()
-        self.reconstruction = self.compute_reconstruction()
+        self.reconstruction = None
+        self.compute_reconstruction()
 
     @property
     def scenario(self):
@@ -134,42 +172,91 @@ class NSpb_space(Behavior_space):
         bnew = [b[x] for x in self.indices]
         return Behavior(self, bnew)
 
+    def array_for_label(self, label):
+        v = np.zeros(self.dimension)
+        v[self.labels.index(label)] = 1
+        return v
+
     def compute_reconstruction(self):
         """
         returns dictionary: 
-        key: label of full behavior space, 
-        value: function: behavior -> correlation for label
         """
         nparties = self.scenario.nparties
         rec = dict()
-        for p in range(nparties):
+
+        for p in range(nparties + 1):
+            fixlabel = str(self.fullspace.events[0])
+            B = dict(zip(self.fullspace.labels, self.fullspace.labels))
             for e in self.fullspace.events:
                 count, sparty = parties_with_last_outcome(e)
+                label = str(e)
                 if count == p:
                     if count == 0:
-                        rec[str(e)] = Function(lambda x: x[str(e)])
+                        rec[label] = Dual_vector(self.array_for_label(label), string = "p[" + label + "]")
                     else:
                         marg, events = events_for_ns(self, e, sparty)
-                        margfun = Function(lambda x: x[str(marg)])
+                        margfun = rec[str(marg)]
                         # NS constraints
-                        rec[str(e)] = margfun - sum([rec[str(x)] for x in events])
-        return rec
+                        rec[label] = margfun - sum([rec[str(x)] for x in events])
 
-    def reconstruct_full_behavior(self, beh: Behavior):
-        cache = dict()
-        fullbeh = []
-        for l in self.fullspace.labels:
-            if l not in cache:
-                c = self.reconstruction[l](beh) 
-                cache[l] = c
-            fullbeh.append(cache[l])
-        return Behavior(self.fullspace, fullbeh)
+        self.reconstruction = np.array([rec[label].fs for label in self.fullspace.labels])
+        return None
 
-    def behavior_from_full_behavior(self, b: Behavior):
-        bns = [ b[i] for  i in self.indices]
-        return Behavior(self, bns)
+    def reconstruct_full(self, beh: Behavior_space_vector):
+        return type(beh)(self.fullspace, np.dot(self.reconstruction, beh))
+
+    def embed_in_fullspace(self, v: Behavior_space_vector):
+        vfull = np.zeros(self.fullspace.dimension)
+        vfull = type(v)(self.fullspace, vfull)
+        for l in self.labels:
+            vfull[l] = v[l]
+        return vfull
+
+    def behavior_vector_from_full(self, b: Behavior_space_vector):
+       #self.indices = self.compute_indices()
+        bns = [ b[l] for  l in self.labels]
+        return type(b)(self, bns)
 
     @property
     def events(self):
         return [self.fullspace.events[i] for i in self.indices]
+
+    def relabelings_group(self, parties=None, settings = None, outcomes = None):
+        groups = []
+        if parties:
+            groups.append(rel.Parties_group(SymmetricGroup(self.scenario.nparties),self))
+
+        if settings:
+            sbp = self.scenario.settings_by_party()
+            triv_group = PermutationGroup(Permutation(0))
+            for p in range(self.scenario.nparties):
+                S = SymmetricGroup(len(sbp[p]) - 1)
+                groups.append(rel.Settings_group(triv_group * S, self, p))
+        if outcomes:
+            for s in self.scenario.settings:
+                groups.append(rel.Outcomes_group(self, s))
+
+        if groups == []:
+            return Group()
+            
+        return rel.Product_group(*groups)
+ 
+        
+
+    def conversion_matrix_to_standard_basis(self, labels):
+        indices = [self.fullspace.labels.index(e) for e in labels]
+        rec_submatrix = [self.reconstruction[i] for i in indices]
+        rec_submatrix = np.array(rec_submatrix, dtype=int)
+        sh = np.shape(rec_submatrix)
+        assert sh[0] == sh[1]
+        assert la.matrix_rank(rec_submatrix) == sh[0]
+        inv = la.inv(rec_submatrix)
+        return inv
+
+    def vector_in_standard_basis(self, b: Behavior_space_vector):
+        inv = self.conversion_matrix_to_standard_basis(b.labels)
+        if isinstance(b, "Bell_inequality"):
+            return Bell_inequality(self, np.dot(inv.transpose(), b.table))
+        if isinstance(b, "Behavior"):
+            return Behavior(self, np.dot(inv, b.table))
 
