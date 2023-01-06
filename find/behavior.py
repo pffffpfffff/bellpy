@@ -301,9 +301,9 @@ class Behavior_space_vector:
     def events(self):
         # for NS behavior space
         if self._events is None:
-            return self.bs.events()
+            return self.bs.events
         else:
-            return self._events()
+            return self._events
 
     def set_events(self, evts):
         # for NS behavior space
@@ -362,6 +362,7 @@ class Behavior_space_vector:
             try:
                 return self.label_dct[i]
             except:
+                print('dct', self.label_dct)
                 raise Exception("Cannot retrieve coefficient for key or index "
                         + str(i))
 
@@ -374,12 +375,24 @@ class Behavior_space_vector:
                 self.label_dct[i] = value
                 self.compute_table()
             else:
+                print('dct', self.label_dct)
                 raise Exception("Cannot retrieve coefficient for key or index "
                         + str(i))
 
+    def __mul__(self, other):
+        """ scalar product """
+        try:
+            if self.behavior_space == other.behavior_space:
+                return np.dot(self.table, other.table)
+        except:
+            raise Exception(f'Other is of type {type(other)} and has value {other}')
+
 
 class Behavior(Behavior_space_vector):
-    pass
+    @staticmethod
+    def from_assignments(beh_sp: Behavior_space, assignments: Assignments):
+        return beh_sp.behavior_from_assignments(assignments) 
+        
 
 
 #   def to_array(self):
@@ -415,7 +428,8 @@ class Bell_inequality_collection:
                 Bell_inequality_collection must have the same Behavior_space')
         return bs
 
-    def remove_duplicates(self, group = None, party = None, setting=None, outcome=None):
+    def remove_duplicates(self, group = None, party = True, setting=True,
+outcome=True):
         # first remove inequalities that are exact duplicates
    #    l = [tuple(bi.table) for bi in self]
    #    uniq_l = list(set(l))

@@ -46,7 +46,11 @@ class Setting:
 
     def __eq__(self, other):
         #careful, value is not compared, on purpose!
+        assert isinstance(other, Setting)
         return self.party==other.party and self.label==other.label
+
+    def __hash__(self):
+        return hash((self.party, self.label))
 
     def __neq__(self, other):
         return not(self == other)

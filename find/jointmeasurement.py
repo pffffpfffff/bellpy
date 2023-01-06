@@ -134,12 +134,12 @@ class JM_nsiterator:
 
     def __next__(self):
         ne = Joint_measurement(next(self.iter), mode=Itmode.full)
-        if self.i == 0:
-            try:
-                ne = Joint_measurement(next(self.iter), mode=Itmode.full)
-            except:
-                pass
-        self.i += 1
+#       if self.i == 0:
+#           try:
+#               ne = Joint_measurement(next(self.iter), mode=Itmode.full)
+#           except:
+#               pass
+#       self.i += 1
         return ne
 
 

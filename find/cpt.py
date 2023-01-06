@@ -535,6 +535,7 @@ class Extended_behavior_iterator:
         b = next(self.iter)
         while self.bi(b) != 0:
             b = next(self.iter)
+           #print(f"Ext beh: type of b {type(b)}")
         return self.extension_map(b)
 
 """
@@ -652,5 +653,6 @@ class Canonic_extension_map(Extension_map):
     @property
     def codomain(self):
         return self.single_extension_maps[-1].codomain
+
 
 

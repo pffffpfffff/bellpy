@@ -37,6 +37,10 @@ class Model(abc.ABC):
        #print('facets', fac)
         return self.behavior_space.facets_to_bell_inequalities(fac)
 
+    def is_facet(self, bi: Bell_inequality):
+        P = Polyhedron(self.data_frame().to_numpy())
+        return P.is_facet(bi.table)
+
     def __str__(self):
         return self.data_frame().__str__()
 
@@ -63,9 +67,11 @@ class Model_iterator:
         self.model = model
         self.bs = self.model.behavior_space
         self.iter = iter(self.model.assignment_model)
+        self.current_assignment = None
 
     def __next__(self):
-        return self.bs.behavior_from_assignments(next(self.iter))
+        self.current_assignment = next(self.iter)
+        return self.bs.behavior_from_assignments(self.current_assignment)
 
 class Local_deterministic_model(Model):
 

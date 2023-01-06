@@ -50,15 +50,23 @@ consecutively starting with 0")
                 l.append(outjoint)
         return l
 
+# --> check, maybe wrong
+#   def behavior_from_assignments(self, assignments: Assignments):
+#       b = []
+#       for jm in assignments:
+#           for outjoint in jm:
+#               if outjoint.outputs == jm.outputs:
+#                   b.append(1)
+#               else:
+#                   b.append(0)
+#       return Behavior(self, b)
+
     def behavior_from_assignments(self, assignments: Assignments):
-        b = []
-        for jm in assignments:
-            for outjoint in jm:
-                if outjoint.outputs == jm.outputs:
-                    b.append(1)
-                else:
-                    b.append(0)
-        return Behavior(self, b)
+        v = np.zeros(self.dimension)
+        for evnt in assignments:
+            ix = self.labels.index(str(evnt))
+            v[ix] = 1
+        return Behavior(self, v)
 
     def relabelings_group(self, parties = None, settings = None, outcomes = None):
         groups = []
@@ -168,9 +176,16 @@ class NSpb_space(Behavior_space):
         return inds
 
     def behavior_from_assignments(self, assignments: Assignments):
-        b = self.fullspace.behavior_from_assignments(assignments).table
-        bnew = [b[x] for x in self.indices]
-        return Behavior(self, bnew)
+        fullbeh = self.fullspace.behavior_from_assignments(assignments)
+        return self.behavior_vector_from_full(fullbeh)
+        """
+        ## alternative implementation
+
+        v = np.zeros(self.dimension)
+        for ev in assignments:
+            v += self.vector(ev)
+        return Behavior(self, v)
+        """
 
     def array_for_label(self, label):
         v = np.zeros(self.dimension)
@@ -178,9 +193,6 @@ class NSpb_space(Behavior_space):
         return v
 
     def compute_reconstruction(self):
-        """
-        returns dictionary: 
-        """
         nparties = self.scenario.nparties
         rec = dict()
 
@@ -202,8 +214,18 @@ class NSpb_space(Behavior_space):
         self.reconstruction = np.array([rec[label].fs for label in self.fullspace.labels])
         return None
 
+    def vector(self, evnt):
+        if isinstance(evnt, Joint_measurement):
+            ix = self.fullspace.labels.index(str(evnt))
+        elif isinstance(evnt, str):
+            ix = self.fullspace.labels.index(evnt)
+        else:
+            raise Exception("Invalid argument type in NSpb_space.vector()")
+        return self.reconstruction[ix]
+        
+
     def reconstruct_full(self, beh: Behavior_space_vector):
-        return type(beh)(self.fullspace, np.dot(self.reconstruction, beh))
+        return type(beh)(self.fullspace, np.dot(self.reconstruction, beh.table))
 
     def embed_in_fullspace(self, v: Behavior_space_vector):
         vfull = np.zeros(self.fullspace.dimension)
@@ -240,6 +262,16 @@ class NSpb_space(Behavior_space):
             return Group()
             
         return rel.Product_group(*groups)
+
+    def party_symmetry(self):
+        G = SymmetricGroup(self.scenario.nparties)
+        idd = np.eye(self.dimension, dtype = int)
+        conds = [rel.Party_permutation(permutation = g, behavior_space =
+    self).matrix.astype(int) \
+                 - idd for g in G.generators]
+        return np.vstack(conds)
+
+
  
         
 
@@ -260,7 +292,4 @@ class NSpb_space(Behavior_space):
         if isinstance(b, "Behavior"):
             return Behavior(self, np.dot(inv, b.table))
 
-    @property
-    def events(self):
-        return [self.fullspace.events[i] for i in self.indices]
 

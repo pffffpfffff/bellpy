@@ -2,11 +2,21 @@ import itertools as it
 import abc
 from bellpy.find.scenario import *
 from bellpy.find.jointmeasurement import Itmode
+from typing import List
 
 class Assignments:
-    def __init__(self, jmeasurements):
+    def __init__(self, jmeasurements, scenario = None):
         self.jm = jmeasurements
-        self.scenario = self.compute_scenario()
+        if isinstance(scenario, Scenario):
+            self.scenario = scenario
+        else:
+            self.scenario = self.compute_scenario()
+
+    @staticmethod
+    def from_local_assignments(settings: List[Setting]):
+        scenario = Scenario(settings) 
+        jm = scenario.joint_measurements()
+        return Assignments(jm, scenario = scenario)
 
     def compute_scenario(self):
         settings = []

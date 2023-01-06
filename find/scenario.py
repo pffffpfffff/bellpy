@@ -1,8 +1,10 @@
 import itertools as it
 from bellpy.find.jointmeasurement import *
+from bellpy.find.setting import *
+from typing import List
 
 class Scenario:
-    def __init__(self, settings: list):
+    def __init__(self, settings: List[Setting]):
         self.settings = settings
 
     @property
